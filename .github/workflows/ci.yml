@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install test dependencies
+        # Only the light test stack -- the full runtime requirements pull in
+        # torch/transformers/faiss, which are not needed to exercise the
+        # text-processing logic and would add several minutes per job.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install reportlab
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Check syntax and undefined names
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: Verify requirements.txt is UTF-8 and parseable
+        # This file was previously committed as UTF-16, which makes
+        # `pip install -r requirements.txt` fail on a fresh clone.
+        run: |
+          python - <<'PY'
+          data = open("requirements.txt", "rb").read()
+          assert not data.startswith((b"\xff\xfe", b"\xfe\xff")), "requirements.txt must not be UTF-16"
+          text = data.decode("utf-8")
+          pkgs = [l for l in text.splitlines() if l.strip() and not l.startswith("#")]
+          assert pkgs, "requirements.txt appears empty"
+          print(f"OK: {len(pkgs)} requirements parsed as UTF-8")
+          PY

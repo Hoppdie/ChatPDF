@@ -1,0 +1,5 @@
+# Test-only dependencies. Keeps CI fast by avoiding the heavy ML stack
+# (torch, transformers, faiss) needed only at application runtime.
+pytest==8.2.0
+langchain==0.0.339
+PyPDF2==3.0.1
